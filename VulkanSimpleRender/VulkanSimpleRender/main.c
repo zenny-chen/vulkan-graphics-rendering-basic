@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdlib.h>
+#include <assert.h>
 #include <limits.h>
 #include <errno.h>
 #include <vulkan/vulkan.h>
