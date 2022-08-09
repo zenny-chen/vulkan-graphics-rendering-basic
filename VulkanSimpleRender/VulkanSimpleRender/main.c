@@ -1994,7 +1994,7 @@ static bool CreateDescriptorPoolAndSet(void)
     {
         // There's no need to free `descriptor_set`, since VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT flag is not set
         // in the member `flags` in `VkDescriptorPoolCreateInfo` object.
-        VkResult res = vkAllocateDescriptorSets(s_specDevice, &alloc_info, &s_swapchainImageResources[i].descriptor_set);
+        res = vkAllocateDescriptorSets(s_specDevice, &alloc_info, &s_swapchainImageResources[i].descriptor_set);
         if (res != VK_SUCCESS)
         {
             printf("vkAllocateDescriptorSets for @%u swapchain image failed: %d\n", i, res);
