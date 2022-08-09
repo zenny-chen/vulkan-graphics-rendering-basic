@@ -36,7 +36,6 @@ enum MY_CONSTANTS
     MAX_FORMAT_COUNT = 32,
     MAX_PRESENT_MODE_COUNT = 8,
     MAX_SWAPCHAIN_IMAGE_COUNT = 16,
-    REQUIRED_SWAPCHAIN_IMAGE_COUNT = 3,
     DYNAMIC_STATE_COUNT = 2,
 
     WINDOW_WIDTH = 512,
@@ -89,7 +88,7 @@ static uint32_t s_graphicsQueueFamilyIndex = 0;
 static uint32_t s_presentQueueFamilyIndex = 0;
 static VkQueue s_graphicsQueue = VK_NULL_HANDLE;
 static VkQueue s_presentQueue = VK_NULL_HANDLE;
-static SwapchainImageResources s_swapchainImageResources[REQUIRED_SWAPCHAIN_IMAGE_COUNT] = { 0 };
+static SwapchainImageResources s_swapchainImageResources[MAX_SWAPCHAIN_IMAGE_COUNT] = { 0 };
 static uint32_t s_swapchainImageCount = 0;
 static uint32_t s_render_width, s_render_height;
 static VkFence s_presentFences[FRAME_LAG] = { VK_NULL_HANDLE };
@@ -912,9 +911,8 @@ static bool CreateVulkanSwapchain(void)
         printf("vkGetSwapchainImagesKHR for count failed: %d\n", res);
         return false;
     }
-    s_swapchainImageCount = min(s_swapchainImageCount, REQUIRED_SWAPCHAIN_IMAGE_COUNT);
 
-    VkImage swapchainImages[REQUIRED_SWAPCHAIN_IMAGE_COUNT];
+    VkImage swapchainImages[MAX_SWAPCHAIN_IMAGE_COUNT];
     res = vkGetSwapchainImagesKHR(s_specDevice, s_swapchain, &s_swapchainImageCount, swapchainImages);
     if (res != VK_SUCCESS)
     {
