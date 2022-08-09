@@ -91,7 +91,6 @@ static VkQueue s_presentQueue = VK_NULL_HANDLE;
 static SwapchainImageResources s_swapchainImageResources[REQUIRED_SWAPCHAIN_IMAGE_COUNT] = { 0 };
 static uint32_t s_swapchainImageCount = 0;
 static uint32_t s_render_width, s_render_height;
-static VkFence s_submitFence = VK_NULL_HANDLE;
 static VkFence s_presentFences[FRAME_LAG] = { VK_NULL_HANDLE };
 static VkSemaphore s_imageAcquiredSemaphores[FRAME_LAG] = { VK_NULL_HANDLE };
 static VkSemaphore s_drawCompleteSemaphores[FRAME_LAG] = { VK_NULL_HANDLE };
@@ -957,14 +956,6 @@ static bool CreateVulkanSwapchain(void)
 
 static bool CreateFencesAndSemaphores(void)
 {
-    const VkFenceCreateInfo submitFenceCreateInfo = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, .pNext = NULL, .flags = 0 };
-    VkResult res = vkCreateFence(s_specDevice, &submitFenceCreateInfo, NULL, &s_submitFence);
-    if (res != VK_SUCCESS)
-    {
-        printf("vkCreateFence for s_submitFence failed: %d\n", res);
-        return false;
-    }
-
     // Create semaphores to synchronize acquiring presentable buffers before
     // rendering and waiting for drawing to be complete before presenting
     const VkSemaphoreCreateInfo semaphoreCreateInfo = {
@@ -983,7 +974,7 @@ static bool CreateFencesAndSemaphores(void)
 
     for (uint32_t i = 0; i < FRAME_LAG; i++)
     {
-        res = vkCreateFence(s_specDevice, &fenceCreateInfo, NULL, &s_presentFences[i]);
+        VkResult res = vkCreateFence(s_specDevice, &fenceCreateInfo, NULL, &s_presentFences[i]);
         if (res != VK_SUCCESS)
         {
             printf("vkCreateFence @%u failed: %d\n", i, res);
@@ -1139,7 +1130,7 @@ static bool CreateCommandBufferAndBeginCommand(void)
     const VkCommandBufferBeginInfo cmdBufBeginInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         .pNext = NULL,
-        .flags = 0,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
         .pInheritanceInfo = NULL,
     };
     res = vkBeginCommandBuffer(s_commandBuffers[0], &cmdBufBeginInfo);
@@ -2082,6 +2073,7 @@ static bool BuildCommandForDraw(VkCommandBuffer inputCmdBuf, uint32_t swapchainI
         .pClearValues = clearValues,
     };
 
+    // ==== The following code block is in the render pass instance. ====
     vkCmdBeginRenderPass(inputCmdBuf, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
     const VkBuffer vertexBuffers[] = {
@@ -2111,6 +2103,7 @@ static bool BuildCommandForDraw(VkCommandBuffer inputCmdBuf, uint32_t swapchainI
     };
     vkCmdSetScissor(inputCmdBuf, 0, 1, &scissor);
 
+    // Draw
     for (int i = 0; i < 2; ++i)
     {
         vkCmdBindPipeline(inputCmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, s_pipelines[i]);
@@ -2151,6 +2144,31 @@ static bool BuildCommandForDraw(VkCommandBuffer inputCmdBuf, uint32_t swapchainI
             NULL, 1, &image_ownership_barrier);
     }
 
+    // Update uniform buffer data on device side.
+    // ATTENTION: vkCmdCopyBuffer MUST BE only called outside of a render pass instance!
+    const size_t srcOffset = sizeof(s_vertex_coords_data) + sizeof(s_vertex_color_data);
+    const VkBufferCopy copyUniformRegion = {
+    .srcOffset = srcOffset,
+    .dstOffset = 0,
+    .size = sizeof(FlattenVertexUniform)
+    };
+    vkCmdCopyBuffer(inputCmdBuf, s_hostVertexAndUniformBuffer,
+        s_swapchainImageResources[swapchainIndex].uniform_buffer, 1, &copyUniformRegion);
+
+    const VkBufferMemoryBarrier copyBarrier = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+        .pNext = NULL,
+        .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+        .srcQueueFamilyIndex = s_graphicsQueueFamilyIndex,
+        .dstQueueFamilyIndex = s_graphicsQueueFamilyIndex,
+        .buffer = s_swapchainImageResources[swapchainIndex].uniform_buffer,
+        .offset = 0,
+        .size = sizeof(FlattenVertexUniform)
+    };
+    vkCmdPipelineBarrier(inputCmdBuf, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, 0,
+        0, NULL, 1, &copyBarrier, 0, NULL);
+
     res = vkEndCommandBuffer(inputCmdBuf);
     if (res != VK_SUCCESS)
     {
@@ -2186,28 +2204,41 @@ static bool FlushInitCommand(void)
         .pSignalSemaphores = NULL
     };
 
-    res = vkQueueSubmit(s_graphicsQueue, 1, &submit_info, s_submitFence);
+    VkFence submitFence = VK_NULL_HANDLE;
+    const VkFenceCreateInfo submitFenceCreateInfo = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, .pNext = NULL, .flags = 0 };
+    res = vkCreateFence(s_specDevice, &submitFenceCreateInfo, NULL, &submitFence);
     if (res != VK_SUCCESS)
     {
-        printf("vkQueueSubmit in init command buffer failed: %d\n", res);
+        printf("vkCreateFence for submitFence failed: %d\n", res);
         return false;
     }
 
-    res = vkWaitForFences(s_specDevice, 1, &s_submitFence, VK_TRUE, UINT64_MAX);
-    if (res != VK_SUCCESS)
+    do
     {
-        printf("vkWaitForFences in init command buffer failed: %d\n", res);
-        return false;
-    }
+        res = vkQueueSubmit(s_graphicsQueue, 1, &submit_info, submitFence);
+        if (res != VK_SUCCESS)
+        {
+            printf("vkQueueSubmit in init command buffer failed: %d\n", res);
+            break;
+        }
 
-    res = vkResetFences(s_specDevice, 1, &s_submitFence);
-    if (res != VK_SUCCESS)
-    {
-        printf("vkResetFences failed in FlushInitCommand: %d\n", res);
-        return false;
+        res = vkWaitForFences(s_specDevice, 1, &submitFence, VK_TRUE, UINT64_MAX);
+        if (res != VK_SUCCESS)
+        {
+            printf("vkWaitForFences in init command buffer failed: %d\n", res);
+            break;
+        }
     }
+    while (false);
 
-    return true;
+    vkDestroyFence(s_specDevice, submitFence, NULL);
+    
+    // This command buffer is one shot for the init flush submission,
+    // and will NOT be used any more.
+    vkFreeCommandBuffers(s_specDevice, s_commandPool, (uint32_t)(sizeof(s_commandBuffers) / sizeof(s_commandBuffers[0])), s_commandBuffers);
+    s_commandBuffers[0] = VK_NULL_HANDLE;
+
+    return res == VK_SUCCESS;
 }
 
 static bool UpdateUniformData(int currImageIndex)
@@ -2232,81 +2263,6 @@ static bool UpdateUniformData(int currImageIndex)
     }
 
     vkUnmapMemory(s_specDevice, s_hostVertexUniformMemory);
-
-    const VkCommandBufferBeginInfo cmdBufBeginInfo = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        .pNext = NULL,
-        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-        .pInheritanceInfo = NULL,
-    };
-    res = vkBeginCommandBuffer(s_commandBuffers[0], &cmdBufBeginInfo);
-    if (res != VK_SUCCESS)
-    {
-        printf("vkBeginCommandBuffer in update uniform data faild: %d\n", res);
-        return false;
-    }
-
-    const VkBufferCopy copyUniformRegion = {
-        .srcOffset = srcOffset,
-        .dstOffset = 0,
-        .size = sizeof(FlattenVertexUniform)
-    };
-    vkCmdCopyBuffer(s_commandBuffers[0], s_hostVertexAndUniformBuffer,
-        s_swapchainImageResources[currImageIndex].uniform_buffer, 1, &copyUniformRegion);
-
-    const VkBufferMemoryBarrier copyBarrier = {
-        .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
-        .pNext = NULL,
-        .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-        .srcQueueFamilyIndex = s_graphicsQueueFamilyIndex,
-        .dstQueueFamilyIndex = s_graphicsQueueFamilyIndex,
-        .buffer = s_swapchainImageResources[currImageIndex].uniform_buffer,
-        .offset = 0,
-        .size = sizeof(FlattenVertexUniform)
-    };
-    vkCmdPipelineBarrier(s_commandBuffers[0], VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, 0,
-        0, NULL, 1, &copyBarrier, 0, NULL);
-
-    res = vkEndCommandBuffer(s_commandBuffers[0]);
-    if (res != VK_SUCCESS)
-    {
-        printf("vkEndCommandBuffer in upate uniform data failed: %d\n", res);
-        return false;
-    }
-
-    const VkSubmitInfo submit_info = {
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .pNext = NULL,
-        .waitSemaphoreCount = 0,
-        .pWaitSemaphores = NULL,
-        .pWaitDstStageMask = NULL,
-        .commandBufferCount = (uint32_t)(sizeof(s_commandBuffers) / sizeof(s_commandBuffers[0])),
-        .pCommandBuffers = s_commandBuffers,
-        .signalSemaphoreCount = 0,
-        .pSignalSemaphores = NULL
-    };
-
-    res = vkQueueSubmit(s_graphicsQueue, 1, &submit_info, s_submitFence);
-    if (res != VK_SUCCESS)
-    {
-        printf("vkQueueSubmit in update uniform buffer failed: %d\n", res);
-        return false;
-    }
-
-    res = vkWaitForFences(s_specDevice, 1, &s_submitFence, VK_TRUE, UINT64_MAX);
-    if (res != VK_SUCCESS)
-    {
-        printf("vkWaitForFences in update uniform buffer failed: %d\n", res);
-        return false;
-    }
-
-    res = vkResetFences(s_specDevice, 1, &s_submitFence);
-    if (res != VK_SUCCESS)
-    {
-        printf("vkResetFences failed in UpdateUniformData: %d\n", res);
-        return false;
-    }
 
     return true;
 }
@@ -2499,9 +2455,6 @@ static void DestroyVulkanAssets(void)
         if (s_imageOwnershipSemaphores[i] != VK_NULL_HANDLE) {
             vkDestroySemaphore(s_specDevice, s_imageOwnershipSemaphores[i], NULL);
         }
-    }
-    if (s_submitFence != VK_NULL_HANDLE) {
-        vkDestroyFence(s_specDevice, s_submitFence, NULL);
     }
 
     if (s_descPool != VK_NULL_HANDLE) {
