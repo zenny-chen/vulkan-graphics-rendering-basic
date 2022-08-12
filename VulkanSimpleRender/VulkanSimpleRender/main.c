@@ -416,23 +416,6 @@ static bool InitializeVulkanDevice(VkQueueFlagBits queueFlag)
 
     s_currPhysicalDevice = physicalDevices[deviceIndex];
 
-    // Query detail driver info
-    VkPhysicalDeviceDriverProperties driverProps = {
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES,
-        // link to subgroupSizeProps node
-        .pNext = NULL
-    };
-
-    VkPhysicalDeviceProperties2 properties2 = {
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
-        // link to driverProps
-        .pNext = &driverProps
-    };
-
-    // Query all above properties
-    vkGetPhysicalDeviceProperties2(s_currPhysicalDevice, &properties2);
-    printf("Detail driver info: %s %s\n", driverProps.driverName, driverProps.driverInfo);
-
     // Query Vulkan extensions the current selected physical device supports
     uint32_t extPropCount = 0U;
     res = vkEnumerateDeviceExtensionProperties(s_currPhysicalDevice, NULL, &extPropCount, NULL);
@@ -457,6 +440,7 @@ static bool InitializeVulkanDevice(VkQueueFlagBits queueFlag)
 
     bool supportSwapchain = false;
     bool supportScalarBlock = false;
+    bool supportDriverProperties = false;
 
     for (uint32_t i = 0; i < extPropCount; ++i)
     {
@@ -480,6 +464,12 @@ static bool InitializeVulkanDevice(VkQueueFlagBits queueFlag)
             availExtensionNames[availExtensionCount++] = currExtName;
             continue;
         }
+        if (strcmp(currExtName, VK_KHR_DRIVER_PROPERTIES_EXTENSION_NAME) == 0)
+        {
+            supportDriverProperties = true;
+            availExtensionNames[availExtensionCount++] = currExtName;
+            continue;
+        }
     }
     if (!supportSwapchain) {
         printf("%s feature not supported!\n", VK_KHR_SWAPCHAIN_EXTENSION_NAME);
@@ -487,7 +477,28 @@ static bool InitializeVulkanDevice(VkQueueFlagBits queueFlag)
     if (!s_supportIncrementalPresent) {
         printf("%s feature not supported!\n", VK_KHR_INCREMENTAL_PRESENT_EXTENSION_NAME);
     }
+    if (!supportDriverProperties) {
+        printf("%s feature not supported or not explicitly given!\n", VK_KHR_DRIVER_PROPERTIES_EXTENSION_NAME);
+    }
+
     printf("Available required device extension count: %u\n\n", availExtensionCount);
+
+    // Query detail driver info
+    VkPhysicalDeviceDriverProperties driverProps = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES,
+        // link to subgroupSizeProps node
+        .pNext = NULL
+    };
+
+    VkPhysicalDeviceProperties2 properties2 = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+        // link to driverProps
+        .pNext = &driverProps
+    };
+
+    // Query all above properties
+    vkGetPhysicalDeviceProperties2(s_currPhysicalDevice, &properties2);
+    printf("Detail driver info: %s %s\n", driverProps.driverName, driverProps.driverInfo);
 
     // ==== The following is query the specific extension features in the feature chaining form ====
     VkPhysicalDeviceScalarBlockLayoutFeatures scalarBlockLayoutFeature = {
