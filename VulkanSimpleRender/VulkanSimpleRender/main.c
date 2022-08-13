@@ -799,7 +799,7 @@ static bool CreateVulkanSwapchain(void)
     // The FIFO present mode is guaranteed by the spec to be supported
     // and to have no tearing.  It's a great default present mode to use.
     const VkPresentModeKHR preferredPresentModes[] = {
-        VK_PRESENT_MODE_FIFO_RELAXED_KHR,
+        //VK_PRESENT_MODE_FIFO_RELAXED_KHR,
         VK_PRESENT_MODE_FIFO_KHR
     };
 
