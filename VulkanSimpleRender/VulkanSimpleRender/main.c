@@ -140,9 +140,9 @@ static const float s_vertex_coords_data[4 * 4] = {
 static const float s_vertex_color_data[4 * 4] = {
     // top left
     0.9f, 0.1f, 0.1f, 1.0f,
-    // bottom left
-    0.1f, 0.9f, 0.1f, 1.0f,
     // top right
+    0.1f, 0.9f, 0.1f, 1.0f,
+    // bottom left
     0.1f, 0.1f, 0.9f, 1.0f,
     // bottom right
     0.9f, 0.1f, 0.9f, 1.0f
@@ -1814,6 +1814,7 @@ static bool CreateGraphicsPipeline(const char* vertSPVFilePath, const char* frag
         .depthClampEnable = VK_FALSE,
         .rasterizerDiscardEnable = VK_FALSE,
         .polygonMode = VK_POLYGON_MODE_FILL,
+        // Index 0 square rotates about the x-axis so that the back face should not be culled.
         .cullMode = index == 0 ? VK_CULL_MODE_NONE : VK_CULL_MODE_BACK_BIT,
         .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
         .depthBiasEnable = VK_FALSE,
