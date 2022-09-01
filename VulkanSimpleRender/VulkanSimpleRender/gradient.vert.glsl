@@ -40,10 +40,10 @@ layout(std430, set = 0, binding = 0, scalar) uniform transform_block {
 void main(void)
 {
     const float offset = 0.6f;
-    // glTranslate(offset, offset, -2.0, 1.0)
+    // glTranslate(offset, offset, -2.3, 1.0)
     mat4 translateMatrix = mat4(1.0f, 0.0f, 0.0f, offset,      // column 0
                                 0.0f, 1.0f, 0.0f, -offset,     // column 1
-                                0.0f, 0.0f, 1.0f, -2.0f,       // column 2
+                                0.0f, 0.0f, 1.0f, -2.3f,       // column 2
                                 0.0f, 0.0f, 0.0f, 1.0f         // column 3
                                 );
 
