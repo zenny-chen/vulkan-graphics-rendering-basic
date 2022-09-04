@@ -49,7 +49,7 @@ void main(void)
 
     const float radian = radians(trans_consts.u_angle);
 
-    // glRotate(u_angle, 0.0, 0.0, 1.0)
+    // glRotate(u_angle, 1.0, 0.0, 0.0)
     mat4 rotateMatrix = mat4(1.0f, 0.0f, 0.0f, 0.0f,                    // column 0
                              0.0f, cos(radian), -sin(radian), 0.0f,     // column 1
                              0.0f, sin(radian), cos(radian), 0.0f,      // column 2
