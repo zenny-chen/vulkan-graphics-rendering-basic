@@ -16,7 +16,6 @@
 #include <Windows.h>
 #include <wincodec.h>
 #include <vulkan/vulkan_win32.h>
-#include <vulkan/vk_sdk_platform.h>
 
 #define _USE_MATH_DEFINES
 #define FILE_BINARY_MODE                    "b"
@@ -127,24 +126,24 @@ static const char* const s_deviceTypes[] = {
 };
 
 static const float s_vertex_coords_data[4 * 4] = {
-    // top left
-    -0.2f, 0.2f, 0.0f, 1.0f,
-    // top right
-    0.2f, 0.2f, 0.0f, 1.0f,
     // bottom left
-    -0.2f, -0.2f, 0.0f, 1.0f,
+    -0.2f, 0.2f, 0.0f, 1.0f,
     // bottom right
+    0.2f, 0.2f, 0.0f, 1.0f,
+    // top left
+    -0.2f, -0.2f, 0.0f, 1.0f,
+    // top right
     0.2f, -0.2f, 0.0f, 1.0f
 };
 
 static const float s_vertex_color_data[4 * 4] = {
-    // top left
-    0.9f, 0.1f, 0.1f, 1.0f,
-    // top right
-    0.1f, 0.9f, 0.1f, 1.0f,
     // bottom left
-    0.1f, 0.1f, 0.9f, 1.0f,
+    0.9f, 0.1f, 0.1f, 1.0f,
     // bottom right
+    0.1f, 0.9f, 0.1f, 1.0f,
+    // top left
+    0.1f, 0.1f, 0.9f, 1.0f,
+    // top right
     0.9f, 0.1f, 0.9f, 1.0f
 };
 
