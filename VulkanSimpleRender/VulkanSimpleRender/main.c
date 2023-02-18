@@ -17,10 +17,34 @@
 #include <wincodec.h>
 #include <vulkan/vulkan_win32.h>
 
+static inline FILE* GeneralOpenFile(const char* path)
+{
+    FILE* fp = NULL;
+    // error code such as `EISDIR`, `EMFILE`, `ENAMETOOLONG`, etc.
+    const errno_t errCode = fopen_s(&fp, path, "rb");
+    if (errCode != 0)
+    {
+        printf("Open file '%s' failed, because: %d\n", path, errCode);
+        return NULL;
+    }
+    return fp;
+}
+
 #define _USE_MATH_DEFINES
-#define FILE_BINARY_MODE                    "b"
+
 #else
-#define FILE_BINARY_MODE
+
+static inline FILE* GeneralOpenFile(const char* path)
+{
+    FILE* fp = fopen(path, "r");
+    if (fp == NULL)
+    {
+        printf("File '%s' open failed!\n", path);
+        return NULL;
+    }
+    return fp;
+}
+
 #endif // _WIN32
 
 #include <math.h>
@@ -1674,7 +1698,7 @@ static bool CreateRenderPass(void)
 
 static bool CreateShaderModule(const char* fileName, VkShaderModule* pShaderModule)
 {
-    FILE* fp = fopen(fileName, "r" FILE_BINARY_MODE);
+    FILE* fp = GeneralOpenFile(fileName);
     if (fp == NULL)
     {
         printf("Shader file %s not found!\n", fileName);
@@ -2557,11 +2581,11 @@ static void DestroyVulkanAssets(void)
     if (s_swapchain != VK_NULL_HANDLE) {
         vkDestroySwapchainKHR(s_specDevice, s_swapchain, NULL);
     }
-    if (s_surface != VK_NULL_HANDLE) {
-        vkDestroySurfaceKHR(s_instance, s_surface, NULL);
-    }
     if (s_specDevice != VK_NULL_HANDLE) {
         vkDestroyDevice(s_specDevice, NULL);
+    }
+    if (s_surface != VK_NULL_HANDLE) {
+        vkDestroySurfaceKHR(s_instance, s_surface, NULL);
     }
     if (s_instance != VK_NULL_HANDLE) {
         vkDestroyInstance(s_instance, NULL);
@@ -2579,6 +2603,9 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
     {
         RECT windowRect;
         GetWindowRect(hWnd, &windowRect);
+        SetWindowLongA(hWnd, GWL_STYLE, GetWindowLongA(hWnd, GWL_STYLE) & ~WS_MINIMIZEBOX);
+        SetWindowLongA(hWnd, GWL_STYLE, GetWindowLongA(hWnd, GWL_STYLE) & ~WS_MAXIMIZEBOX);
+        SetWindowLongA(hWnd, GWL_STYLE, GetWindowLongA(hWnd, GWL_STYLE) & ~WS_SIZEBOX);
         break;
     }
 
