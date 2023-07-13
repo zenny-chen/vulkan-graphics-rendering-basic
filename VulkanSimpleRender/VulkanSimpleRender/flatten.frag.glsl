@@ -1,4 +1,3 @@
-
 #version 450 core
 
 precision mediump int;
@@ -11,3 +10,4 @@ void main(void)
 {
     myOutput = fragColor;
 }
+

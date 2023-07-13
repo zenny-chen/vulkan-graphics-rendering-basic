@@ -32,5 +32,8 @@
     <None Include="gradient.vert.glsl">
       <Filter>资源文件</Filter>
     </None>
+    <None Include="glsl_builder.bat">
+      <Filter>资源文件</Filter>
+    </None>
   </ItemGroup>
 </Project>
